@@ -1,6 +1,6 @@
 # Bloom
 
-A pre-configured Arch-based distro featuring Hyprland, developer tools, and other essential applications, built around a Hyprland-focused development workflow.
+A pre-configured Arch-based distro featuring Hyprland, developer tools, and other essential applications, built around a Hyprland-focused development workflow. Was originally made to be a distro specifically for auth.
 
 Bloom is not designed for beginners. While installation and day-to-day use are straightforward for users familiar with Linux, some knowledge of Arch Linux and the command line is expected! This distro is based off Arch after all, so expect to maintain your OWN system rather than having the system do it for you.
 
