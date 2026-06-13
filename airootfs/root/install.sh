@@ -384,6 +384,9 @@ cat > /etc/hosts <<HOSTS
 127.0.1.1   $HOSTNAME.localdomain $HOSTNAME
 HOSTS
 
+sed -i 's/^NAME=.*/NAME="Bloom Linux"/' /etc/os-release
+sed -i 's/^PRETTY_NAME=.*/PRETTY_NAME="Bloom Linux"/' /etc/os-release
+
 sed -i "s/^HOOKS=.*/$MKINIT_HOOKS/" /etc/mkinitcpio.conf
 mkinitcpio -P
 
