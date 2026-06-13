@@ -41,4 +41,3 @@ sudo mkarchiso -v -w /tmp/bloom-work -o /tmp/bloom-out ~/bloom
 Building may take a while.
 
 More documentation can be avaliable at: https://bloom.cloudlull.fyi
-
