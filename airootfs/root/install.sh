@@ -2,7 +2,7 @@
 
 set -e
 
-r="\e[31m" g="\e[32m" y="\e[33m" b="\e[34m" m="\e[35m" c="\e[36m" w="\e[0m"
+r="\e[31m" g="\e[32m" y="\e[33m" b="\e[34m" m="\e[38;2;255;182;217m" c="\e[36m" w="\e[0m"
 
 say()  { echo -e "\n${b}bloom${w} :: $*"; }
 ok()   { echo -e "${g}  ✓${w}  $*"; }
@@ -259,6 +259,13 @@ echo "  greeter    : $DM_PKG"
 echo ""
 confirm "looks good? no going back after this" || die "aborted"
 
+say "checking internet connection..."
+until ping -c 1 -W 3 archlinux.org &>/dev/null; do
+  warn "no internet detected. make sure you're connected and press enter to retry, or Ctrl+C to abort."
+  read -rp ""
+done
+ok "internet ok"
+
 if [ "$WIPE" = true ]; then
   say "partitioning $DISK..."
   sgdisk -Z "$DISK"
@@ -398,7 +405,7 @@ sudo -u $USERNAME makepkg -si --noconfirm
 cd /
 rm -rf /tmp/yay
 
-sudo -u $USERNAME yay -S --noconfirm helium-browser-bin vscodium-bin obsidian-bin $( [ "$DM_AUR" = true ] && echo "$DM_PKG" )
+sudo -u $USERNAME yay -S --noconfirm helium-browser-bin vscodium-bin obsidian-bin vesktop $( [ "$DM_AUR" = true ] && echo "$DM_PKG" )
 
 systemctl enable $DM_SVC
 
