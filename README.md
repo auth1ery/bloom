@@ -9,3 +9,36 @@ The included Hyprland dotfile is not maintained or made by this project. It is b
 https://github.com/end-4/dots-hyprland
 
 (check them out!)
+
+# Building
+
+If you want to build and compile Bloom yourself, you must already have installed Arch Linux. Then install `archiso`:
+
+```
+sudo pacman -S archiso
+```
+
+Clone and cd into the folder:
+
+```
+git clone https://github.com/auth1ery/bloom.git
+cd bloom
+```
+
+Then build:
+
+```
+sudo mkarchiso -v -w /tmp/bloom-work -o /tmp/bloom-out ~/bloom
+```
+
+If you've already built it and want to build again, run the same command but delete the other Bloom folders first:
+
+```
+sudo rm -rf /tmp/bloom-work /tmp/bloom-out
+sudo mkarchiso -v -w /tmp/bloom-work -o /tmp/bloom-out ~/bloom
+```
+
+Building may take a while.
+
+More documentation can be avaliable at: https://bloom.cloudlull.fyi
+
