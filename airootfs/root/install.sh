@@ -331,7 +331,7 @@ PACSTRAP_PKGS=(
   networkmanager
   sudo git curl wget
   kitty
-  fastfetch
+  fastfetch hyfetch
   fish
   pipewire pipewire-alsa pipewire-pulse wireplumber
   bluez bluez-utils
