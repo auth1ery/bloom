@@ -348,7 +348,7 @@ PACSTRAP_PKGS=(
   cmatrix cava
   ffmpeg lm_sensors lua mesa
   nodejs rsync tlp plymouth \
-  ufw ufw-docker fail2ban apparmor
+  ufw fail2ban apparmor
 )
 [ "$DM_AUR" = false ] && PACSTRAP_PKGS+=("$DM_PKG")
 pacstrap /mnt "${PACSTRAP_PKGS[@]}"
@@ -412,7 +412,7 @@ rm -rf /tmp/yay
 
 sudo -u $USERNAME yay -S --noconfirm \
   helium-browser-bin vscodium-bin obsidian-bin vesktop \
-  obs-studio-git windsurf localsend \
+  obs-studio-git windsurf localsend ufw-docker \
   $( [ "$DM_AUR" = true ] && echo "$DM_PKG" )
 
 systemctl enable $DM_SVC
