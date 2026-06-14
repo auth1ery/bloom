@@ -534,119 +534,361 @@ import QtQuick.Controls 2.15
 import SddmComponents 2.0
 
 Rectangle {
-    width: Screen.width
-    height: Screen.height
-    color: "#1a1a2e"
+    id: root
+    width: 1920
+    height: 1080
+    color: "#1a0f22"
 
     property int sessionIndex: sessionModel.lastIndex
+    property bool showLogin: false
+    property real gridOffset: 0
 
-    Rectangle {
-        anchors.centerIn: parent
-        width: 340
-        height: 420
-        radius: 16
-        color: "#2a1f2e"
+    NumberAnimation on gridOffset {
+        from: 0
+        to: 40
+        duration: 3000
+        loops: Animation.Infinite
+        running: true
+    }
+
+    Timer {
+        id: clockTimer
+        interval: 1000
+        running: true
+        repeat: true
+        onTriggered: {
+            timeText.text = Qt.formatTime(new Date(), "hh:mm")
+            secondText.text = Qt.formatTime(new Date(), "ss")
+            dateText.text = Qt.formatDate(new Date(), "dddd, MMMM d yyyy")
+        }
+    }
+
+    Canvas {
+        id: gridCanvas
+        anchors.fill: parent
+        opacity: 0.07
+
+        onPaint: {
+            var ctx = getContext("2d")
+            ctx.clearRect(0, 0, width, height)
+            ctx.strokeStyle = "#ffb6d9"
+            ctx.lineWidth = 0.5
+            var spacing = 40
+            var ox = -(gridOffset % spacing)
+            var oy = -(gridOffset % spacing)
+            for (var x = ox; x < width + spacing; x += spacing) {
+                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke()
+            }
+            for (var y = oy; y < height + spacing; y += spacing) {
+                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke()
+            }
+        }
+
+        Timer {
+            interval: 16
+            running: true
+            repeat: true
+            onTriggered: gridCanvas.requestPaint()
+        }
+    }
+
+    Rectangle { width: 320; height: 320; radius: 160; color: "#2d0f3d"; opacity: 0.5
+        anchors { top: parent.top; left: parent.left; topMargin: -80; leftMargin: -80 } }
+    Rectangle { width: 240; height: 240; radius: 120; color: "#3d1a4a"; opacity: 0.4
+        anchors { bottom: parent.bottom; right: parent.right; bottomMargin: -60; rightMargin: -60 } }
+    Rectangle { width: 180; height: 180; radius: 90; color: "#ff80c0"; opacity: 0.06
+        anchors { bottom: parent.bottom; left: parent.left; bottomMargin: 80; leftMargin: 60 } }
+
+    Item {
+        id: lockScreen
+        anchors.fill: parent
+        opacity: showLogin ? 0 : 1
+        visible: opacity > 0
+
+        Behavior on opacity { NumberAnimation { duration: 400; easing.type: Easing.InOutQuad } }
+
+        MouseArea {
+            anchors.fill: parent
+            onClicked: showLogin = true
+        }
+
+        Keys.onPressed: showLogin = true
+
+        Column {
+            anchors {
+                left: parent.left
+                leftMargin: parent.width * 0.1
+                verticalCenter: parent.verticalCenter
+            }
+            spacing: 4
+
+            Row {
+                spacing: 12
+
+                Text {
+                    id: timeText
+                    text: Qt.formatTime(new Date(), "hh:mm")
+                    font.family: "JetBrains Mono"
+                    font.pixelSize: 96
+                    font.weight: Font.Light
+                    color: "#ffb6d9"
+                }
+
+                Text {
+                    id: secondText
+                    text: Qt.formatTime(new Date(), "ss")
+                    font.family: "JetBrains Mono"
+                    font.pixelSize: 32
+                    font.weight: Font.Light
+                    color: "#a06080"
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: 18
+                }
+            }
+
+            Text {
+                id: dateText
+                text: Qt.formatDate(new Date(), "dddd, MMMM d yyyy")
+                font.family: "JetBrains Mono"
+                font.pixelSize: 18
+                color: "#7a5570"
+            }
+
+            Item { height: 40; width: 1 }
+
+            Row {
+                spacing: 32
+
+                Column {
+                    spacing: 4
+                    Text {
+                        text: "hostname"
+                        font.family: "JetBrains Mono"
+                        font.pixelSize: 11
+                        color: "#5a3860"
+                    }
+                    Text {
+                        text: userModel.lastUser + "@bloom"
+                        font.family: "JetBrains Mono"
+                        font.pixelSize: 14
+                        color: "#c084a8"
+                    }
+                }
+
+                Column {
+                    spacing: 4
+                    Text {
+                        text: "session"
+                        font.family: "JetBrains Mono"
+                        font.pixelSize: 11
+                        color: "#5a3860"
+                    }
+                    Text {
+                        text: "hyprland"
+                        font.family: "JetBrains Mono"
+                        font.pixelSize: 14
+                        color: "#c084a8"
+                    }
+                }
+
+                Column {
+                    spacing: 4
+                    Text {
+                        text: "os"
+                        font.family: "JetBrains Mono"
+                        font.pixelSize: 11
+                        color: "#5a3860"
+                    }
+                    Text {
+                        text: "bloom linux"
+                        font.family: "JetBrains Mono"
+                        font.pixelSize: 14
+                        color: "#c084a8"
+                    }
+                }
+            }
+
+            Item { height: 48; width: 1 }
+
+            Row {
+                spacing: 8
+                Text {
+                    text: "click anywhere to unlock"
+                    font.family: "JetBrains Mono"
+                    font.pixelSize: 12
+                    color: "#5a3860"
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+            }
+        }
+
+        Column {
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: 48
+            spacing: 2
+
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: "      _._"
+                font.family: "JetBrains Mono"
+                font.pixelSize: 11
+                color: "#3d2040"
+            }
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: "   .-( * )-."
+                font.family: "JetBrains Mono"
+                font.pixelSize: 11
+                color: "#3d2040"
+            }
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: "  ( *  *  * )"
+                font.family: "JetBrains Mono"
+                font.pixelSize: 11
+                color: "#4a2850"
+            }
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: "   '-( * )-'"
+                font.family: "JetBrains Mono"
+                font.pixelSize: 11
+                color: "#3d2040"
+            }
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: "      `-'"
+                font.family: "JetBrains Mono"
+                font.pixelSize: 11
+                color: "#3d2040"
+            }
+        }
+    }
+
+    Item {
+        id: loginScreen
+        anchors.fill: parent
+        opacity: showLogin ? 1 : 0
+        visible: opacity > 0
+
+        Behavior on opacity { NumberAnimation { duration: 400; easing.type: Easing.InOutQuad } }
+
+        MouseArea {
+            anchors.fill: parent
+            onClicked: {
+                if (!userField.contains(mapToItem(userField, mouse.x, mouse.y)) &&
+                    !passField.contains(mapToItem(passField, mouse.x, mouse.y))) {
+                    showLogin = false
+                }
+            }
+        }
 
         Column {
             anchors.centerIn: parent
             spacing: 16
+            width: 340
+
+            Column {
+                anchors.horizontalCenter: parent.horizontalCenter
+                spacing: 2
+                Text { anchors.horizontalCenter: parent.horizontalCenter; text: "      _._"; font.family: "JetBrains Mono"; font.pixelSize: 13; color: "#c084a8" }
+                Text { anchors.horizontalCenter: parent.horizontalCenter; text: "   .-( * )-."; font.family: "JetBrains Mono"; font.pixelSize: 13; color: "#d490b8" }
+                Text { anchors.horizontalCenter: parent.horizontalCenter; text: "  ( *  *  * )"; font.family: "JetBrains Mono"; font.pixelSize: 13; color: "#ffb6d9" }
+                Text { anchors.horizontalCenter: parent.horizontalCenter; text: "   '-( * )-'"; font.family: "JetBrains Mono"; font.pixelSize: 13; color: "#d490b8" }
+                Text { anchors.horizontalCenter: parent.horizontalCenter; text: "      \`-'"; font.family: "JetBrains Mono"; font.pixelSize: 13; color: "#c084a8" }
+            }
+
+            Item { height: 4; width: 1 }
 
             Text {
                 anchors.horizontalCenter: parent.horizontalCenter
                 text: "bloom"
-                font.pixelSize: 32
                 font.family: "JetBrains Mono"
+                font.pixelSize: 42
+                font.weight: Font.Light
                 color: "#ffb6d9"
             }
 
             Text {
                 anchors.horizontalCenter: parent.horizontalCenter
-                text: "      _._\n   .-( * )-.\n  ( *  *  * )\n   '-( * )-'\n      \`-'"
-                font.pixelSize: 11
+                text: Qt.formatDate(new Date(), "dddd, MMMM d")
                 font.family: "JetBrains Mono"
-                color: "#cc88aa"
-                lineHeight: 1.3
+                font.pixelSize: 12
+                color: "#7a5570"
             }
 
             Item { height: 8; width: 1 }
 
             Rectangle {
-                width: 260
-                height: 38
-                radius: 8
-                color: "#3d2a3d"
-                border.color: "#ffb6d9"
-                border.width: 1
+                width: parent.width
+                height: 56
+                radius: 28
+                color: userField.activeFocus ? "#2e1840" : "#22112e"
+                border.color: userField.activeFocus ? "#ffb6d9" : "#4a2860"
+                border.width: userField.activeFocus ? 2 : 1
+                Behavior on border.color { ColorAnimation { duration: 200 } }
+                Behavior on color { ColorAnimation { duration: 200 } }
 
+                Text {
+                    anchors.left: parent.left; anchors.leftMargin: 24
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "username"; font.family: "JetBrains Mono"; font.pixelSize: 13
+                    color: "#5a3860"; visible: userField.text.length === 0
+                }
                 TextInput {
                     id: userField
-                    anchors.fill: parent
-                    anchors.margins: 10
+                    anchors.fill: parent; anchors.leftMargin: 24; anchors.rightMargin: 24
                     text: userModel.lastUser
-                    font.family: "JetBrains Mono"
-                    font.pixelSize: 13
-                    color: "#ffb6d9"
+                    font.family: "JetBrains Mono"; font.pixelSize: 13; color: "#ffb6d9"
                     verticalAlignment: TextInput.AlignVCenter
-
-                    Text {
-                        anchors.fill: parent
-                        text: "username"
-                        font.family: "JetBrains Mono"
-                        font.pixelSize: 13
-                        color: "#885566"
-                        verticalAlignment: Text.AlignVCenter
-                        visible: userField.text.length === 0
-                    }
+                    KeyNavigation.tab: passField
                 }
             }
 
             Rectangle {
-                width: 260
-                height: 38
-                radius: 8
-                color: "#3d2a3d"
-                border.color: "#ffb6d9"
-                border.width: 1
+                width: parent.width
+                height: 56
+                radius: 28
+                color: passField.activeFocus ? "#2e1840" : "#22112e"
+                border.color: passField.activeFocus ? "#ffb6d9" : "#4a2860"
+                border.width: passField.activeFocus ? 2 : 1
+                Behavior on border.color { ColorAnimation { duration: 200 } }
+                Behavior on color { ColorAnimation { duration: 200 } }
 
+                Text {
+                    anchors.left: parent.left; anchors.leftMargin: 24
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "password"; font.family: "JetBrains Mono"; font.pixelSize: 13
+                    color: "#5a3860"; visible: passField.text.length === 0
+                }
                 TextInput {
                     id: passField
-                    anchors.fill: parent
-                    anchors.margins: 10
+                    anchors.fill: parent; anchors.leftMargin: 24; anchors.rightMargin: 24
                     echoMode: TextInput.Password
-                    font.family: "JetBrains Mono"
-                    font.pixelSize: 13
-                    color: "#ffb6d9"
+                    font.family: "JetBrains Mono"; font.pixelSize: 13; color: "#ffb6d9"
                     verticalAlignment: TextInput.AlignVCenter
                     Keys.onReturnPressed: sddm.login(userField.text, passField.text, sessionIndex)
-
-                    Text {
-                        anchors.fill: parent
-                        text: "password"
-                        font.family: "JetBrains Mono"
-                        font.pixelSize: 13
-                        color: "#885566"
-                        verticalAlignment: Text.AlignVCenter
-                        visible: passField.text.length === 0
-                    }
                 }
             }
 
             Rectangle {
-                width: 260
-                height: 38
-                radius: 8
-                color: "#ffb6d9"
+                width: parent.width
+                height: 56
+                radius: 28
+                color: loginBtn.containsMouse ? "#ff80c0" : "#ffb6d9"
+                Behavior on color { ColorAnimation { duration: 150 } }
 
                 Text {
                     anchors.centerIn: parent
-                    text: "login"
-                    color: "#1a1a2e"
-                    font.family: "JetBrains Mono"
-                    font.pixelSize: 13
+                    text: "sign in"; color: "#1a0f22"
+                    font.family: "JetBrains Mono"; font.pixelSize: 14; font.weight: Font.Medium
                 }
-
                 MouseArea {
+                    id: loginBtn
                     anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
                     onClicked: sddm.login(userField.text, passField.text, sessionIndex)
                 }
             }
