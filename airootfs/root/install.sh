@@ -331,7 +331,7 @@ PACSTRAP_PKGS=(
   networkmanager
   sudo git curl wget
   kitty
-  fastfetch hyfetch
+  fastfetch
   fish
   pipewire pipewire-alsa pipewire-pulse wireplumber
   bluez bluez-utils
@@ -347,7 +347,7 @@ PACSTRAP_PKGS=(
   flatpak cmake ca-certificates
   cmatrix cava
   ffmpeg lm_sensors lua mesa
-  nodejs rsync tlp
+  nodejs rsync tlp plymouth
 )
 [ "$DM_AUR" = false ] && PACSTRAP_PKGS+=("$DM_PKG")
 pacstrap /mnt "${PACSTRAP_PKGS[@]}"
@@ -440,6 +440,236 @@ CHROOT
 
 ok "chroot configuration done"
 
+say "setting up branding..."
+
+echo "Bloom Linux" > /mnt/etc/issue
+
+cat > /mnt/etc/bloom-release << 'BLOOMREL'
+NAME="Bloom Linux"
+VERSION="1.0"
+BASED_ON="Arch Linux"
+MAINTAINER="auth"
+BLOOMREL
+
+say "setting up SDDM theme..."
+
+mkdir -p /mnt/usr/share/sddm/themes/bloom
+
+cat > /mnt/usr/share/sddm/themes/bloom/metadata.desktop << 'META'
+[SddmGreeterTheme]
+Name=bloom
+Description=bloom linux login
+Author=auth
+META
+
+cat > /mnt/usr/share/sddm/themes/bloom/Main.qml << 'QML'
+import QtQuick 2.15
+import QtQuick.Controls 2.15
+import SddmComponents 2.0
+
+Rectangle {
+    width: Screen.width
+    height: Screen.height
+    color: "#1a1a2e"
+
+    property int sessionIndex: sessionModel.lastIndex
+
+    Rectangle {
+        anchors.centerIn: parent
+        width: 340
+        height: 420
+        radius: 16
+        color: "#2a1f2e"
+
+        Column {
+            anchors.centerIn: parent
+            spacing: 16
+
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: "bloom"
+                font.pixelSize: 32
+                font.family: "JetBrains Mono"
+                color: "#ffb6d9"
+            }
+
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: "      _._\n   .-( * )-.\n  ( *  *  * )\n   '-( * )-'\n      \`-'"
+                font.pixelSize: 11
+                font.family: "JetBrains Mono"
+                color: "#cc88aa"
+                lineHeight: 1.3
+            }
+
+            Item { height: 8; width: 1 }
+
+            Rectangle {
+                width: 260
+                height: 38
+                radius: 8
+                color: "#3d2a3d"
+                border.color: "#ffb6d9"
+                border.width: 1
+
+                TextInput {
+                    id: userField
+                    anchors.fill: parent
+                    anchors.margins: 10
+                    text: userModel.lastUser
+                    font.family: "JetBrains Mono"
+                    font.pixelSize: 13
+                    color: "#ffb6d9"
+                    verticalAlignment: TextInput.AlignVCenter
+
+                    Text {
+                        anchors.fill: parent
+                        text: "username"
+                        font.family: "JetBrains Mono"
+                        font.pixelSize: 13
+                        color: "#885566"
+                        verticalAlignment: Text.AlignVCenter
+                        visible: userField.text.length === 0
+                    }
+                }
+            }
+
+            Rectangle {
+                width: 260
+                height: 38
+                radius: 8
+                color: "#3d2a3d"
+                border.color: "#ffb6d9"
+                border.width: 1
+
+                TextInput {
+                    id: passField
+                    anchors.fill: parent
+                    anchors.margins: 10
+                    echoMode: TextInput.Password
+                    font.family: "JetBrains Mono"
+                    font.pixelSize: 13
+                    color: "#ffb6d9"
+                    verticalAlignment: TextInput.AlignVCenter
+                    Keys.onReturnPressed: sddm.login(userField.text, passField.text, sessionIndex)
+
+                    Text {
+                        anchors.fill: parent
+                        text: "password"
+                        font.family: "JetBrains Mono"
+                        font.pixelSize: 13
+                        color: "#885566"
+                        verticalAlignment: Text.AlignVCenter
+                        visible: passField.text.length === 0
+                    }
+                }
+            }
+
+            Rectangle {
+                width: 260
+                height: 38
+                radius: 8
+                color: "#ffb6d9"
+
+                Text {
+                    anchors.centerIn: parent
+                    text: "login"
+                    color: "#1a1a2e"
+                    font.family: "JetBrains Mono"
+                    font.pixelSize: 13
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: sddm.login(userField.text, passField.text, sessionIndex)
+                }
+            }
+        }
+    }
+}
+QML
+
+cat > /mnt/etc/sddm.conf << 'SDDMCONF'
+[Theme]
+Current=bloom
+SDDMCONF
+
+ok "SDDM theme configured"
+
+say "setting up plymouth..."
+
+mkdir -p /mnt/usr/share/plymouth/themes/bloom
+
+cat > /mnt/usr/share/plymouth/themes/bloom/bloom.plymouth << 'PLYMOUTH'
+[Plymouth Theme]
+Name=bloom
+Description=bloom linux boot splash
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/bloom
+ScriptFile=/usr/share/plymouth/themes/bloom/bloom.script
+PLYMOUTH
+
+cat > /mnt/usr/share/plymouth/themes/bloom/bloom.script << 'PLYSCRIPT'
+screen_width = Window.GetWidth();
+screen_height = Window.GetHeight();
+
+background = Rectangle();
+background.SetColor(0.1, 0.07, 0.12, 1);
+background.SetX(0);
+background.SetY(0);
+background.SetWidth(screen_width);
+background.SetHeight(screen_height);
+
+logo = Image.Text("bloom", 1.0, 0.71, 0.85, 1);
+logo_sprite = Sprite(logo);
+logo_sprite.SetX(screen_width / 2 - logo.GetWidth() / 2);
+logo_sprite.SetY(screen_height / 2 - 40);
+
+dots_count = 3;
+dot_sprites = [];
+dot_x_start = screen_width / 2 - 20;
+
+for (i = 0; i < dots_count; i++) {
+    dot = Image.Text("·", 1.0, 0.71, 0.85, 1);
+    s = Sprite(dot);
+    s.SetX(dot_x_start + i * 20);
+    s.SetY(screen_height / 2 + 10);
+    s.SetOpacity(0);
+    dot_sprites[i] = s;
+}
+
+counter = 0;
+
+fun refresh_callback() {
+    counter++;
+    for (i = 0; i < dots_count; i++) {
+        phase = Math.Sin((counter / 30.0 + i * 0.5) * 3.14159);
+        op = (phase + 1) / 2;
+        dot_sprites[i].SetOpacity(op);
+    }
+}
+
+Plymouth.SetRefreshFunction(refresh_callback);
+PLYSCRIPT
+
+arch-chroot /mnt /bin/bash << 'PLYCHROOT'
+cat > /etc/plymouth/plymouthd.conf << 'PLYCONF'
+[Daemon]
+Theme=bloom
+ShowDelay=0
+PLYCONF
+sed -i 's/^HOOKS=(base /HOOKS=(base plymouth /' /etc/mkinitcpio.conf
+echo "MODULES=(i915)" >> /etc/mkinitcpio.conf
+sed -i 's/^MODULES=()$//' /etc/mkinitcpio.conf
+mkinitcpio -P
+PLYCHROOT
+
+sed -i 's/ quiet loglevel=3$/ quiet loglevel=3 splash/' /mnt/boot/loader/entries/bloom.conf
+
+ok "plymouth configured"
+
 say "setting up fastfetch..."
 FFCONF_DIR="/mnt/home/$USERNAME/.config/fastfetch"
 mkdir -p "$FFCONF_DIR"
@@ -519,5 +749,5 @@ umount -R /mnt
 [ "$USE_ENCRYPTION" = true ] && cryptsetup close cryptroot
 
 echo ""
-ok "all done. reboot with 'reboot'."
+ok "all done! reboot with 'reboot'."
 echo ""
