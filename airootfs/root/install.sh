@@ -347,7 +347,8 @@ PACSTRAP_PKGS=(
   flatpak cmake ca-certificates
   cmatrix cava
   ffmpeg lm_sensors lua mesa
-  nodejs rsync tlp plymouth
+  nodejs rsync tlp plymouth \
+  ufw ufw-docker fail2ban apparmor
 )
 [ "$DM_AUR" = false ] && PACSTRAP_PKGS+=("$DM_PKG")
 pacstrap /mnt "${PACSTRAP_PKGS[@]}"
@@ -360,10 +361,10 @@ say "configuring system..."
 
 if [ "$USE_ENCRYPTION" = true ]; then
   MKINIT_HOOKS="HOOKS=(base udev autodetect microcode modconf kms keyboard keymap consolefont block encrypt lvm2 filesystems fsck)"
-  BOOT_OPTIONS="cryptdevice=UUID=$CRYPT_UUID:cryptroot:allow-discards root=/dev/bloom-vg/root rw quiet loglevel=3"
+  BOOT_OPTIONS="cryptdevice=UUID=$CRYPT_UUID:cryptroot:allow-discards root=/dev/bloom-vg/root rw quiet loglevel=3 lsm=landlock,lockdown,yama,integrity,apparmor,bpf"
 else
   MKINIT_HOOKS="HOOKS=(base udev autodetect microcode modconf kms keyboard keymap consolefont block lvm2 filesystems fsck)"
-  BOOT_OPTIONS="root=/dev/bloom-vg/root rw quiet loglevel=3"
+  BOOT_OPTIONS="root=/dev/bloom-vg/root rw quiet loglevel=3 lsm=landlock,lockdown,yama,integrity,apparmor,bpf"
 fi
 
 arch-chroot /mnt /bin/bash <<CHROOT
@@ -399,6 +400,7 @@ echo "%wheel ALL=(ALL:ALL) ALL" > /etc/sudoers.d/wheel
 systemctl enable NetworkManager
 systemctl enable bluetooth
 systemctl enable tlp
+systemctl enable apparmor
 
 cd /tmp
 git clone https://aur.archlinux.org/yay.git
@@ -408,9 +410,54 @@ sudo -u $USERNAME makepkg -si --noconfirm
 cd /
 rm -rf /tmp/yay
 
-sudo -u $USERNAME yay -S --noconfirm helium-browser-bin vscodium-bin obsidian-bin vesktop $( [ "$DM_AUR" = true ] && echo "$DM_PKG" )
+sudo -u $USERNAME yay -S --noconfirm \
+  helium-browser-bin vscodium-bin obsidian-bin vesktop \
+  obs-studio-git windsurf localsend \
+  $( [ "$DM_AUR" = true ] && echo "$DM_PKG" )
 
 systemctl enable $DM_SVC
+
+ufw default deny incoming
+ufw default allow outgoing
+ufw allow 22/tcp
+ufw allow 53317/tcp
+ufw allow 53317/udp
+ufw enable
+systemctl enable ufw
+
+cat > /etc/ufw/applications.d/localsend << 'EOF'
+[LocalSend]
+title=LocalSend
+description=Open source cross-platform alternative to AirDrop
+ports=53317/tcp|53317/udp
+EOF
+
+systemctl enable fail2ban
+
+cat > /etc/fail2ban/jail.local << 'EOF'
+[DEFAULT]
+bantime = 1h
+findtime = 10m
+maxretry = 5
+
+[sshd]
+enabled = true
+port = ssh
+EOF
+
+cat > /etc/sysctl.d/99-bloom-hardening.conf << 'EOF'
+kernel.dmesg_restrict = 1
+kernel.kptr_restrict = 2
+net.ipv4.conf.all.rp_filter = 1
+net.ipv4.conf.default.rp_filter = 1
+net.ipv4.conf.all.accept_redirects = 0
+net.ipv4.conf.default.accept_redirects = 0
+net.ipv4.conf.all.send_redirects = 0
+net.ipv6.conf.all.accept_redirects = 0
+net.ipv4.icmp_echo_ignore_broadcasts = 1
+net.ipv4.tcp_syncookies = 1
+net.ipv4.conf.all.log_martians = 1
+EOF
 
 bootctl install
 
