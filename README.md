@@ -1,43 +1,68 @@
-# Bloom
+# bloom
 
-A pre-configured Arch-based distro featuring Hyprland, developer tools, and other essential applications, built around a Hyprland-focused development workflow. Was originally made to be a distro specifically for auth.
+a pre-configured arch-based linux distro built around a hyprland workflow. made by auth, for auth: but feel free to build it yourself.
 
-Bloom is not designed for beginners. While installation and day-to-day use are straightforward for users familiar with Linux, some knowledge of Arch Linux and the command line is expected! This distro is based off Arch after all, so expect to maintain your OWN system rather than having the system do it for you.
+bloom comes with disk encryption (LUKS2), a custom installer, developer tools, and a curated set of apps out of the box. it is not designed for beginners. it requires some familiarity with arch linux and the command line! this is still arch under the hood, so you maintain your own system still.
 
-The included Hyprland dotfile is not maintained or made by this project. It is based on the open-source illogical-impulse project by end-4:
+## what's included
+
+- hyprland (via illogical-impulse dotfiles by end-4)
+- kitty, fish, fastfetch
+- neovim + lazyvim
+- vesktop, helium browser, vscodium, obsidian
+- spotify, gear lever, edb debugger (flatpak)
+- pipewire, bluez, networkmanager
+- disk encryption with LUKS2 + LVM
+- custom SDDM login theme
+- custom plymouth boot splash
+- yay (AUR helper)
+
+## dotfiles
+
+the included hyprland config is not made or maintained by this project. it is based on the open-source illogical-impulse project by end-4:
 
 https://github.com/end-4/dots-hyprland
 
-(check them out!)
+## building
 
-# Building
-
-If you want to build and compile Bloom yourself, you must already have installed Arch Linux. Then install `archiso`:
+you must be on arch linux with `archiso` installed:
 
 ```
 sudo pacman -S archiso
 ```
 
-Clone and cd into the folder:
+clone the repo:
 
 ```
 git clone https://github.com/auth1ery/bloom.git
 cd bloom
 ```
 
-Then build:
+build:
 
 ```
 sudo mkarchiso -v -w /tmp/bloom-work -o /tmp/bloom-out ~/bloom
 ```
 
-If you've already built it and want to build again, run the same command but delete the other Bloom folders first:
+to rebuild from scratch:
 
 ```
 sudo rm -rf /tmp/bloom-work /tmp/bloom-out
 sudo mkarchiso -v -w /tmp/bloom-work -o /tmp/bloom-out ~/bloom
 ```
 
-Building may take a while.
+building takes a few minutes. the output ISO will be in `/tmp/bloom-out/`.
 
-More documentation can be avaliable at: https://bloom.cloudlull.fyi
+## installing
+
+flash the ISO to a USB drive:
+
+```
+dd if=/tmp/bloom-out/bloom-*.iso of=/dev/sdX bs=4M status=progress
+```
+
+boot from the USB, then type `install` at the shell prompt to start the installer. the installer will walk you through partitioning, encryption, locale, user setup, and everything else!
+
+## more info
+
+https://bloom.cloudlull.fyi
