@@ -930,32 +930,83 @@ background.SetY(0);
 background.SetWidth(screen_width);
 background.SetHeight(screen_height);
 
-logo = Image.Text("bloom", 1.0, 0.71, 0.85, 1);
-logo_sprite = Sprite(logo);
-logo_sprite.SetX(screen_width / 2 - logo.GetWidth() / 2);
-logo_sprite.SetY(screen_height / 2 - 40);
+lines = ["      _._", "   .-( * )-.", "  ( *  *  * )", "   '-( * )-'", "      `-'"];
+colors_r = [0.75, 0.83, 1.0, 0.83, 0.75];
+colors_g = [0.52, 0.56, 0.71, 0.56, 0.52];
+colors_b = [0.66, 0.72, 0.85, 0.72, 0.66];
+
+num_lines = 5;
+sprites = [];
+line_height = 20;
+total_height = num_lines * line_height;
+start_y = screen_height / 2 - total_height / 2 - 30;
+
+for (i = 0; i < num_lines; i++) {
+    img = Image.Text(lines[i], colors_r[i], colors_g[i], colors_b[i], 1);
+    s = Sprite(img);
+    s.SetX(screen_width / 2 - img.GetWidth() / 2);
+    s.SetY(start_y + i * line_height);
+    s.SetOpacity(0);
+    sprites[i] = s;
+}
+
+label = Image.Text("bloom", 1.0, 0.71, 0.85, 1);
+label_sprite = Sprite(label);
+label_sprite.SetX(screen_width / 2 - label.GetWidth() / 2);
+label_sprite.SetY(start_y + num_lines * line_height + 16);
+label_sprite.SetOpacity(0);
 
 dots_count = 3;
 dot_sprites = [];
 dot_x_start = screen_width / 2 - 20;
+dots_y = start_y + num_lines * line_height + 52;
 
 for (i = 0; i < dots_count; i++) {
     dot = Image.Text("·", 1.0, 0.71, 0.85, 1);
     s = Sprite(dot);
     s.SetX(dot_x_start + i * 20);
-    s.SetY(screen_height / 2 + 10);
+    s.SetY(dots_y);
     s.SetOpacity(0);
     dot_sprites[i] = s;
 }
 
 counter = 0;
+reveal_delay = 30;
 
 fun refresh_callback() {
     counter++;
-    for (i = 0; i < dots_count; i++) {
-        phase = Math.Sin((counter / 30.0 + i * 0.5) * 3.14159);
-        op = (phase + 1) / 2;
-        dot_sprites[i].SetOpacity(op);
+
+    for (i = 0; i < num_lines; i++) {
+        trigger = i * reveal_delay;
+        if (counter > trigger) {
+            elapsed = counter - trigger;
+            fade_frames = 20;
+            if (elapsed < fade_frames) {
+                sprites[i].SetOpacity(elapsed / fade_frames);
+            } else {
+                sprites[i].SetOpacity(1);
+            }
+        }
+    }
+
+    label_trigger = num_lines * reveal_delay + 10;
+    if (counter > label_trigger) {
+        elapsed = counter - label_trigger;
+        fade_frames = 25;
+        if (elapsed < fade_frames) {
+            label_sprite.SetOpacity(elapsed / fade_frames);
+        } else {
+            label_sprite.SetOpacity(1);
+        }
+    }
+
+    dots_trigger = label_trigger + 30;
+    if (counter > dots_trigger) {
+        for (i = 0; i < dots_count; i++) {
+            phase = Math.Sin((counter / 30.0 + i * 0.5) * 3.14159);
+            op = (phase + 1) / 2;
+            dot_sprites[i].SetOpacity(op);
+        }
     }
 }
 
