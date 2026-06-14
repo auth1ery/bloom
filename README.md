@@ -44,7 +44,7 @@ the included hyprland dotfile (illogical-impulse) is not made or maintained by t
 https://github.com/end-4/dots-hyprland
 
 ## building
-bloom does not give an iso by default for you to install and check signatures to ensure safety and control. fortunately, the building process is not too complex at all, but it does require the command line!
+bloom does not give an iso by default for you to install and check signatures. fortunately, the building process is not too complex at all, but it does require the command line!
 
 you must be on arch linux with `archiso` installed:
 ```
