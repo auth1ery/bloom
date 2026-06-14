@@ -360,7 +360,7 @@ PACSTRAP_PKGS=(
   flatpak cmake ca-certificates
   cmatrix cava
   ffmpeg lm_sensors lua mesa
-  nodejs rsync tlp plymouth \
+  nodejs rsync tlp plymouth
   ufw fail2ban apparmor
 )
 [ "$DM_AUR" = false ] && PACSTRAP_PKGS+=("$DM_PKG")
@@ -974,7 +974,7 @@ sed -i 's/^MODULES=()$//' /etc/mkinitcpio.conf
 mkinitcpio -P
 PLYCHROOT
 
-sed -i 's/ quiet loglevel=3$/ quiet loglevel=3 splash/' /mnt/boot/loader/entries/bloom.conf
+sed -i 's/rw quiet loglevel=3/rw quiet loglevel=3 splash/' /mnt/boot/loader/entries/bloom.conf
 
 ok "plymouth configured"
 
