@@ -259,6 +259,14 @@ echo "  greeter    : $DM_PKG"
 echo ""
 confirm "looks good? no going back after this" || die "aborted"
 
+echo ""
+warn "the installer will run for a while unattended."
+warn "some steps (yay, dotfiles) may prompt for your sudo password."
+warn "if you miss a prompt and it times out, that step will be skipped."
+warn "keep an eye on the screen during installation."
+echo ""
+read -rp "$(echo -e "${c}  ?${w}  press enter to begin...")"
+
 say "checking internet connection..."
 until ping -c 1 -W 3 archlinux.org &>/dev/null; do
   warn "no internet detected. make sure you're connected and press enter to retry, or Ctrl+C to abort."
@@ -322,6 +330,11 @@ mkdir -p /mnt/boot
 mount "$PART_EFI" /mnt/boot
 [ "$SWAPSIZE" != "0" ] && swapon /dev/bloom-vg/swap
 ok "mounted"
+
+say "refreshing mirrors..."
+pacman -Sy --noconfirm reflector
+reflector --latest 10 --sort rate --save /etc/pacman.d/mirrorlist
+ok "mirrors refreshed"
 
 say "installing base system (grab a coffee, this takes a while)..."
 PACSTRAP_PKGS=(
@@ -403,17 +416,17 @@ systemctl enable tlp
 systemctl enable apparmor
 
 cd /tmp
-git clone https://aur.archlinux.org/yay.git
+git clone https://aur.archlinux.org/yay.git || { echo "warn: failed to clone yay — AUR packages will not be installed"; exit 0; }
 chown -R $USERNAME:$USERNAME yay
 cd yay
-sudo -u $USERNAME makepkg -si --noconfirm
+sudo -u $USERNAME makepkg -si --noconfirm || { echo "warn: yay build failed — AUR packages will not be installed"; exit 0; }
 cd /
 rm -rf /tmp/yay
 
 sudo -u $USERNAME yay -S --noconfirm \
   helium-browser-bin vscodium-bin obsidian-bin vesktop \
   obs-studio-git windsurf localsend ufw-docker \
-  $( [ "$DM_AUR" = true ] && echo "$DM_PKG" )
+  $( [ "$DM_AUR" = true ] && echo "$DM_PKG" ) || warn "some AUR packages failed to install — you can install them manually after boot with yay"
 
 systemctl enable $DM_SVC
 
@@ -477,17 +490,17 @@ options $BOOT_OPTIONS
 ENTRY
 
 if [ ! -d /home/$USERNAME/.config/nvim ]; then
-  sudo -u $USERNAME git clone https://github.com/LazyVim/starter /home/$USERNAME/.config/nvim
-  rm -rf /home/$USERNAME/.config/nvim/.git
+  sudo -u $USERNAME git clone https://github.com/LazyVim/starter /home/$USERNAME/.config/nvim 2>/dev/null \
+    && rm -rf /home/$USERNAME/.config/nvim/.git \
+    || echo "warn: lazyvim clone failed, skipping"
 fi
 
 sudo -u $USERNAME nvim --headless "+Lazy sync" +qa 2>/dev/null || true
 
-flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-flatpak install flathub -y \
-  com.spotify.Client \
-  it.mijorus.gearlever \
-  io.github.eteran.edb-debugger
+flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo || true
+flatpak install flathub -y com.spotify.Client || echo "warn: spotify install failed"
+flatpak install flathub -y it.mijorus.gearlever || echo "warn: gearlever install failed"
+flatpak install flathub -y io.github.eteran.edb-debugger || echo "warn: edb install failed"
 
 CHROOT
 
@@ -779,9 +792,11 @@ chown -R 1000:1000 "$FISH_CONF_DIR"
 ok "fish configured"
 
 say "installing hyprland dotfiles..."
-arch-chroot /mnt sudo -u "$USERNAME" bash -c \
-  'bash <(curl -s https://ii.clsty.link/get)'
-ok "dotfiles installed"
+if arch-chroot /mnt sudo -u "$USERNAME" bash -c 'bash <(curl -s https://ii.clsty.link/get)'; then
+  ok "dotfiles installed"
+else
+  warn "dotfiles install failed or was interrupted — run 'bash <(curl -s https://ii.clsty.link/get)' manually after boot"
+fi
 
 echo ""
 echo -e "${m}"
