@@ -724,6 +724,7 @@ FISH_CONF_DIR="/mnt/home/$USERNAME/.config/fish"
 mkdir -p "$FISH_CONF_DIR"
 cat > "$FISH_CONF_DIR/config.fish" << 'FISHCFG'
 if status is-login
+    set -gx XDG_DATA_DIRS /var/lib/flatpak/exports/share $HOME/.local/share/flatpak/exports/share $XDG_DATA_DIRS
     fastfetch
 end
 FISHCFG
