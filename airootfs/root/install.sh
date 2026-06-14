@@ -436,6 +436,12 @@ fi
 
 sudo -u $USERNAME nvim --headless "+Lazy sync" +qa 2>/dev/null || true
 
+flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+flatpak install flathub -y \
+  com.spotify.Client \
+  it.mijorus.gearlever \
+  io.github.eteran.edb-debugger
+
 CHROOT
 
 ok "chroot configuration done"
@@ -749,5 +755,5 @@ umount -R /mnt
 [ "$USE_ENCRYPTION" = true ] && cryptsetup close cryptroot
 
 echo ""
-ok "all done! reboot with 'reboot'."
+ok "all done. reboot with 'reboot'."
 echo ""
