@@ -362,6 +362,7 @@ PACSTRAP_PKGS=(
   ffmpeg lm_sensors lua mesa
   nodejs rsync tlp plymouth
   ufw fail2ban apparmor
+  alsa-utils htop btop reflector
 )
 [ "$DM_AUR" = false ] && PACSTRAP_PKGS+=("$DM_PKG")
 pacstrap /mnt "${PACSTRAP_PKGS[@]}"
@@ -407,6 +408,7 @@ mkinitcpio -P
 useradd -m -G wheel,audio,video,storage,optical,network -s /bin/fish "$USERNAME"
 echo "$USERNAME:$UPASS" | chpasswd
 unset UPASS UPASS2
+sudo -u "$USERNAME" xdg-user-dirs-update --force
 
 echo "%wheel ALL=(ALL:ALL) ALL" > /etc/sudoers.d/wheel
 
