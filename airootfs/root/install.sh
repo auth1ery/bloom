@@ -363,6 +363,8 @@ PACSTRAP_PKGS=(
   nodejs rsync tlp plymouth
   ufw fail2ban apparmor
   alsa-utils htop btop reflector
+  sl figlet toilet fortune-mod cowsay
+  
 )
 [ "$DM_AUR" = false ] && PACSTRAP_PKGS+=("$DM_PKG")
 pacstrap /mnt "${PACSTRAP_PKGS[@]}"
@@ -428,6 +430,7 @@ rm -rf /tmp/yay
 sudo -u $USERNAME yay -S --noconfirm \
   helium-browser-bin vscodium-bin obsidian-bin vesktop \
   obs-studio-git windsurf localsend ufw-docker \
+  hollywood cbonsai tty-clock \
   $( [ "$DM_AUR" = true ] && echo "$DM_PKG" ) || warn "some AUR packages failed to install — you can install them manually after boot with yay"
 
 systemctl enable $DM_SVC
