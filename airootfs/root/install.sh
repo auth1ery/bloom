@@ -364,7 +364,7 @@ PACSTRAP_PKGS=(
   nodejs rsync tlp plymouth
   ufw fail2ban apparmor
   alsa-utils htop btop reflector
-  sl figlet toilet fortune-mod cowsay
+  sl figlet toilet fortune-mod cowsay tokei
   
 )
 [ "$DM_AUR" = false ] && PACSTRAP_PKGS+=("$DM_PKG")
