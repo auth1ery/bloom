@@ -360,6 +360,7 @@ PACSTRAP_PKGS=(
   flatpak cmake ca-certificates
   cmatrix cava
   ffmpeg lm_sensors lua mesa
+  gst-libav gst-plugins-good gst-plugins-bad gst-plugins-ugly
   nodejs rsync tlp plymouth
   ufw fail2ban apparmor
   alsa-utils htop btop reflector
