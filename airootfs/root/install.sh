@@ -1091,9 +1091,6 @@ if status is-login
 end
 
 alias cls clear
-alias .. 'cd ..'
-alias ... 'cd ../..'
-alias .... 'cd ../../..'
 alias h history
 alias q exit
 FISHCFG
