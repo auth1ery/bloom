@@ -349,6 +349,7 @@ PACSTRAP_PKGS=(
   kitty
   fastfetch
   fish
+  jq inotify-tools wl-clipboard wtype
   pipewire pipewire-alsa pipewire-pulse wireplumber
   bluez bluez-utils
   nano neovim
@@ -1096,6 +1097,22 @@ alias q exit
 FISHCFG
 chown -R 1000:1000 "$FISH_CONF_DIR"
 ok "fish configured"
+
+say "installing custom CLI tools..."
+
+TOOLS_SRC="$(dirname "$(readlink -f "$0")")/bloom-bin"
+mkdir -p /mnt/usr/local/bin
+
+for tool in secure repaste; do
+  src="$TOOLS_SRC/$tool"
+  if [ -f "$src" ]; then
+    cp "$src" /mnt/usr/local/bin/"$tool"
+    chmod 755 /mnt/usr/local/bin/"$tool"
+    ok "installed $tool -> /usr/local/bin/$tool"
+  else
+    warn "$tool not found at $src, skipping"
+  fi
+done
 
 say "installing hyprland dotfiles..."
 if arch-chroot /mnt sudo -u "$USERNAME" bash -c 'bash <(curl -s https://ii.clsty.link/get)'; then

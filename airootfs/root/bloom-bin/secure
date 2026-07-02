@@ -1,0 +1,644 @@
+#!/usr/bin/env fish
+
+# secure - Hyprland session integrity system
+#
+# Snapshots, monitors, diffs, and restores the live state of a Hyprland
+# session (workspaces, windows, binds, exec-once processes, config hashes).
+
+set -g SECURE_HOME $HOME/.local/share/secure
+set -g SECURE_SNAPSHOTS $SECURE_HOME/snapshots
+set -g SECURE_TRUSTED $SECURE_HOME/trusted
+set -g SECURE_STATE $HOME/.local/state/secure
+set -g SECURE_LOG $SECURE_STATE/log.jsonl
+set -g SECURE_LASTGOOD $SECURE_STATE/last-good
+
+if test -n "$HYPR_CONFIG"
+    set -g SECURE_CONFIG $HYPR_CONFIG
+else
+    set -g SECURE_CONFIG $HOME/.config/hypr/hyprland.conf
+end
+
+# ---------------------------------------------------------------------------
+# bootstrap
+# ---------------------------------------------------------------------------
+
+function secure_check_deps
+    for bin in hyprctl jq sha256sum pgrep pkill
+        if not type -q $bin
+            echo "secure: missing required dependency '$bin'" >&2
+            return 1
+        end
+    end
+    if not set -q HYPRLAND_INSTANCE_SIGNATURE
+        echo "secure: HYPRLAND_INSTANCE_SIGNATURE is not set, are you inside a Hyprland session?" >&2
+        return 3
+    end
+    return 0
+end
+
+function secure_init_dirs
+    mkdir -p $SECURE_SNAPSHOTS $SECURE_TRUSTED $SECURE_STATE
+end
+
+function secure_log
+    # $argv[1] = level, $argv[2] = message, $argv[3] = optional json detail (already valid json)
+    set -l level $argv[1]
+    set -l msg $argv[2]
+    set -l detail "{}"
+    if test (count $argv) -ge 3
+        set detail $argv[3]
+    end
+    set -l ts (date -u +"%Y-%m-%dT%H:%M:%SZ")
+    set -l line (jq -nc --arg ts "$ts" --arg level "$level" --arg msg "$msg" --argjson detail "$detail" \
+        '{ts: $ts, level: $level, msg: $msg, detail: $detail}')
+    echo $line >> $SECURE_LOG
+    switch $level
+        case error
+            echo "[!] $msg" >&2
+        case warn
+            echo "[warn] $msg"
+        case '*'
+            echo "[*] $msg"
+    end
+end
+
+function secure_config_files
+    # emits absolute paths of the root config plus all sourced files
+    set -l root $SECURE_CONFIG
+    set -l seen
+    set -l queue $root
+
+    while test (count $queue) -gt 0
+        set -l current $queue[1]
+        set -e queue[1]
+
+        if contains $current $seen
+            continue
+        end
+        set -a seen $current
+
+        if not test -f $current
+            continue
+        end
+
+        echo $current
+
+        set -l base_dir (dirname $current)
+        for line in (grep -E '^\s*source\s*=\s*' $current)
+            set -l ref (string trim (string split -m1 '=' $line)[2])
+            set ref (string replace '~' $HOME $ref)
+            if not string match -q '/*' $ref
+                set ref "$base_dir/$ref"
+            end
+            set -a queue $ref
+        end
+    end
+end
+
+function secure_config_hash_json
+    # produces {"path": "sha256:...", ...} for the whole config tree
+    set -l entries
+    for f in (secure_config_files)
+        set -l h (sha256sum $f | cut -d' ' -f1)
+        set -a entries (jq -nc --arg p "$f" --arg h "sha256:$h" '{($p): $h}')
+    end
+    if test (count $entries) -eq 0
+        echo "{}"
+        return
+    end
+    printf '%s\n' $entries | jq -s 'add'
+end
+
+function secure_exec_once_json
+    set -l entries
+    for f in (secure_config_files)
+        for line in (grep -E '^\s*exec-once\s*=\s*' $f)
+            set -l cmd (string trim (string split -m1 '=' $line)[2])
+            set -l bin (string split ' ' $cmd)[1]
+            set -l pid (pgrep -f -- (string escape --style=regex $bin) | head -n1)
+            if test -n "$pid"
+                set -a entries (jq -nc --arg cmd "$cmd" --argjson running true --arg pid "$pid" \
+                    '{cmd: $cmd, running: $running, pid: ($pid | tonumber)}')
+            else
+                set -a entries (jq -nc --arg cmd "$cmd" --argjson running false \
+                    '{cmd: $cmd, running: $running, pid: null}')
+            end
+        end
+    end
+    if test (count $entries) -eq 0
+        echo "[]"
+        return
+    end
+    printf '%s\n' $entries | jq -s '.'
+end
+
+function secure_capture_state
+    set -l ver (hyprctl version -j | jq -r '.tag // .commit // "unknown"')
+    set -l workspaces (hyprctl workspaces -j)
+    set -l active_ws (hyprctl activeworkspace -j | jq '.id')
+    set -l clients (hyprctl clients -j)
+    set -l binds (hyprctl binds -j)
+    set -l cfg_files (secure_config_hash_json)
+    set -l execs (secure_exec_once_json)
+    set -l ts (date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    jq -n \
+        --arg ts "$ts" \
+        --arg ver "$ver" \
+        --argjson workspaces "$workspaces" \
+        --argjson active_ws "$active_ws" \
+        --argjson clients "$clients" \
+        --argjson binds "$binds" \
+        --argjson cfg_files "$cfg_files" \
+        --argjson execs "$execs" \
+        '{
+            meta: {created_at: $ts, hyprland_version: $ver},
+            config: {files: $cfg_files},
+            workspaces: $workspaces,
+            active_workspace: $active_ws,
+            clients: $clients,
+            binds: $binds,
+            exec_once: $execs
+        }'
+end
+
+# ---------------------------------------------------------------------------
+# snapshot
+# ---------------------------------------------------------------------------
+
+function secure_snapshot
+    set -l name $argv[1]
+    set -l force 0
+    if contains -- --force $argv
+        set force 1
+    end
+
+    if test -z "$name"
+        echo "secure: --snapshot requires a name" >&2
+        return 1
+    end
+
+    set -l dir $SECURE_SNAPSHOTS/$name
+    if test -d $dir; and test $force -eq 0
+        echo "secure: snapshot '$name' already exists, use --force to overwrite" >&2
+        return 1
+    end
+
+    mkdir -p $dir/config
+    secure_capture_state > $dir/state.json
+
+    # copy the actual config files alongside the hash manifest so restore
+    # can put back exact bytes, not just verify a hash
+    for f in (secure_config_files)
+        set -l dest $dir/config/(string replace -a '/' '_' $f)
+        cp $f $dest
+    end
+
+    secure_log info "snapshot '$name' created" (jq -nc --arg n "$name" '{name: $n}')
+    echo "snapshot '$name' saved to $dir"
+end
+
+function secure_list
+    if not test -d $SECURE_SNAPSHOTS
+        echo "no snapshots yet"
+        return 0
+    end
+    set -l found 0
+    for d in $SECURE_SNAPSHOTS/*/
+        set -l name (basename $d)
+        set -l state $d/state.json
+        if test -f $state
+            set found 1
+            set -l created (jq -r '.meta.created_at' $state)
+            set -l nclients (jq '.clients | length' $state)
+            printf "%-20s created=%s windows=%s\n" $name $created $nclients
+        end
+    end
+    if test $found -eq 0
+        echo "no snapshots yet"
+    end
+end
+
+# ---------------------------------------------------------------------------
+# diff engine (works snapshot-vs-live and snapshot-vs-snapshot)
+# ---------------------------------------------------------------------------
+
+function secure_diff_states
+    # $argv[1] = path to state A (baseline), $argv[2] = path to state B (current)
+    set -l a $argv[1]
+    set -l b $argv[2]
+
+    echo "== config =="
+    set -l cfg_diff (jq -n --slurpfile a $a --slurpfile b $b '
+        ($a[0].config.files) as $ca | ($b[0].config.files) as $cb |
+        {
+            changed: [($ca | keys[]) as $k | select($cb[$k] != null and $cb[$k] != $ca[$k]) | $k],
+            missing: [($ca | keys[]) as $k | select($cb[$k] == null) | $k],
+            added:   [($cb | keys[]) as $k | select($ca[$k] == null) | $k]
+        }')
+    set -l changed (echo $cfg_diff | jq -r '.changed[]' 2>/dev/null)
+    set -l missing (echo $cfg_diff | jq -r '.missing[]' 2>/dev/null)
+    set -l cfgadded (echo $cfg_diff | jq -r '.added[]' 2>/dev/null)
+    if test -z "$changed$missing$cfgadded"
+        echo "  config hashes match"
+    else
+        for f in $changed
+            echo "  hash mismatch: $f"
+        end
+        for f in $missing
+            echo "  file removed since baseline: $f"
+        end
+        for f in $cfgadded
+            echo "  new file since baseline: $f"
+        end
+    end
+
+    echo "== workspaces =="
+    jq -n --slurpfile a $a --slurpfile b $b -r '
+        ($a[0].active_workspace) as $wa | ($b[0].active_workspace) as $wb |
+        if $wa != $wb then "  focused workspace changed: \($wa) -> \($wb)" else "  focused workspace unchanged (\($wa))" end'
+
+    echo "== windows =="
+    set -l window_diff (jq -n --slurpfile a $a --slurpfile b $b '
+        ($a[0].clients | map({key: .address, value: {class, title, workspace: .workspace.id}}) | from_entries) as $ca |
+        ($b[0].clients | map({key: .address, value: {class, title, workspace: .workspace.id}}) | from_entries) as $cb |
+        {
+            closed: [($ca | keys[]) as $k | select($cb[$k] == null) | $ca[$k]],
+            opened: [($cb | keys[]) as $k | select($ca[$k] == null) | $cb[$k]],
+            moved:  [($ca | keys[]) as $k | select($cb[$k] != null and $cb[$k].workspace != $ca[$k].workspace) |
+                     {class: $ca[$k].class, title: $ca[$k].title, from: $ca[$k].workspace, to: $cb[$k].workspace}]
+        }')
+    set -l nclosed (echo $window_diff | jq '.closed | length')
+    set -l nopened (echo $window_diff | jq '.opened | length')
+    set -l nmoved (echo $window_diff | jq '.moved | length')
+
+    if test $nclosed -eq 0; and test $nopened -eq 0; and test $nmoved -eq 0
+        echo "  no window changes"
+    else
+        echo $window_diff | jq -r '.closed[] | "  closed: \(.class) - \(.title) (was ws \(.workspace))"'
+        echo $window_diff | jq -r '.opened[] | "  opened: \(.class) - \(.title) (ws \(.workspace))"'
+        echo $window_diff | jq -r '.moved[]  | "  moved: \(.class) - \(.title) (ws \(.from) -> \(.to))"'
+    end
+
+    echo "== binds =="
+    jq -n --slurpfile a $a --slurpfile b $b -r '
+        ($a[0].binds | length) as $la | ($b[0].binds | length) as $lb |
+        if $la != $lb then "  bind count changed: \($la) -> \($lb)" else "  bind count unchanged (\($la))" end'
+
+    echo "== exec-once =="
+    jq -n --slurpfile a $a --slurpfile b $b -r '
+        ($b[0].exec_once[] | select(.running == false)) as $dead |
+        "  not running: \($dead.cmd)"' 2>/dev/null
+end
+
+function secure_diff
+    set -l name $argv[1]
+    if test -z "$name"
+        echo "secure: --diff requires a snapshot name" >&2
+        return 1
+    end
+    set -l snap $SECURE_SNAPSHOTS/$name/state.json
+    if not test -f $snap
+        echo "secure: snapshot '$name' not found" >&2
+        return 2
+    end
+
+    set -l tmp (mktemp)
+    secure_capture_state > $tmp
+    echo "diffing live session against snapshot '$name'"
+    secure_diff_states $snap $tmp
+    rm -f $tmp
+end
+
+# ---------------------------------------------------------------------------
+# restore
+# ---------------------------------------------------------------------------
+
+function secure_restore
+    set -l name $argv[1]
+    if test -z "$name"
+        echo "secure: --restore requires a snapshot name" >&2
+        return 1
+    end
+    set -l dir $SECURE_SNAPSHOTS/$name
+    set -l snap $dir/state.json
+    if not test -f $snap
+        echo "secure: snapshot '$name' not found" >&2
+        return 2
+    end
+
+    secure_log info "restore of '$name' started"
+
+    # 1. restore config files verbatim, backing up whatever is currently live
+    set -l backup_dir (mktemp -d)
+    for f in (secure_config_files)
+        if test -f $f
+            cp $f $backup_dir/(string replace -a '/' '_' $f)
+        end
+    end
+    for stored in $dir/config/*
+        set -l original (string replace -a '_' '/' (basename $stored))
+        if test -f $original
+            cp $stored $original
+        end
+    end
+    secure_log info "config restored, live backup kept at $backup_dir"
+
+    hyprctl reload > /dev/null
+    if test $status -ne 0
+        secure_log error "hyprctl reload failed during restore, config backup at $backup_dir"
+        return 4
+    end
+
+    # 2. restore workspace focus
+    set -l target_ws (jq '.active_workspace' $snap)
+    hyprctl dispatch workspace $target_ws > /dev/null
+
+    # 3. reconcile windows: move existing ones back to their workspace,
+    #    relaunch ones that are missing entirely
+    set -l live (hyprctl clients -j)
+    set -l relaunch_failures 0
+
+    for row in (jq -c '.clients[]' $snap)
+        set -l class (echo $row | jq -r '.class')
+        set -l ws (echo $row | jq -r '.workspace.id')
+        set -l addr (echo $row | jq -r '.address')
+
+        set -l still_open (echo $live | jq --arg a "$addr" '[.[] | select(.address == $a)] | length')
+        if test "$still_open" -gt 0
+            hyprctl dispatch movetoworkspacesilent "$ws,address:$addr" > /dev/null
+        else
+            set -l cmd (jq -r --arg c "$class" '.exec_once[] | select(.cmd | test($c; "i")) | .cmd' $snap | head -n1)
+            if test -n "$cmd"
+                hyprctl dispatch exec "$cmd" > /dev/null
+                secure_log info "relaunched $class via '$cmd'"
+            else
+                set relaunch_failures (math $relaunch_failures + 1)
+                secure_log warn "could not determine launch command for $class, left for manual restore"
+            end
+        end
+    end
+
+    if test $relaunch_failures -gt 0
+        secure_log warn "$relaunch_failures window(s) could not be auto-relaunched"
+        echo "restore complete with $relaunch_failures window(s) needing manual relaunch"
+        return 4
+    end
+
+    secure_log info "restore of '$name' completed"
+    echo "restore of '$name' completed"
+end
+
+# ---------------------------------------------------------------------------
+# watch
+# ---------------------------------------------------------------------------
+
+function secure_watch
+    secure_log info "watch started"
+    echo "secure: watching session (config files + hyprctl state), ctrl-c to stop"
+
+    set -l baseline (mktemp)
+    secure_capture_state > $baseline
+
+    set -l cfg_files (secure_config_files)
+
+    # background inotify watcher writes a marker file whenever config changes
+    set -l marker (mktemp)
+    inotifywait -m -e modify -e move -e create -e delete $cfg_files >/dev/null 2>&1 &
+    set -l inotify_pid $last_pid
+
+    function secure_watch_cleanup --on-signal INT --inherit-variable inotify_pid
+        kill $inotify_pid 2>/dev/null
+        secure_log info "watch stopped"
+        exit 0
+    end
+
+    while true
+        sleep 3
+        set -l current (mktemp)
+        secure_capture_state > $current
+
+        set -l cfg_changed (jq -n --slurpfile a $baseline --slurpfile b $current \
+            'if ($a[0].config.files) == ($b[0].config.files) then false else true end')
+        if test "$cfg_changed" = "true"
+            secure_log warn "config drift detected"
+        end
+
+        set -l ws_changed (jq -n --slurpfile a $baseline --slurpfile b $current \
+            'if ($a[0].active_workspace) == ($b[0].active_workspace) then false else true end')
+        if test "$ws_changed" = "true"
+            set -l from (jq '.active_workspace' $baseline)
+            set -l to (jq '.active_workspace' $current)
+            secure_log info "workspace focus changed: $from -> $to"
+        end
+
+        set -l window_delta (jq -n --slurpfile a $baseline --slurpfile b $current '
+            (($a[0].clients | length) - ($b[0].clients | length)) | abs')
+        if test "$window_delta" -gt 0
+            secure_log warn "window count changed by $window_delta"
+        end
+
+        for entry in (jq -c '.exec_once[] | select(.running == false)' $current)
+            set -l cmd (echo $entry | jq -r '.cmd')
+            secure_log warn "expected exec-once process not running: $cmd"
+        end
+
+        mv $current $baseline
+    end
+end
+
+# ---------------------------------------------------------------------------
+# oh shit it panic
+# ---------------------------------------------------------------------------
+
+function secure_panic
+    secure_log warn "panic triggered"
+
+    if not test -f $SECURE_LASTGOOD
+        echo "secure: no snapshot marked as last-good, run 'secure --mark-good <name>' first" >&2
+        secure_log error "panic aborted, no last-good snapshot"
+        return 2
+    end
+    set -l good_name (cat $SECURE_LASTGOOD)
+    set -l good_dir $SECURE_SNAPSHOTS/$good_name
+    if not test -f $good_dir/state.json
+        echo "secure: last-good snapshot '$good_name' is missing on disk" >&2
+        secure_log error "panic aborted, last-good snapshot missing"
+        return 2
+    end
+
+    # kill any running process whose exec-once command is not present
+    # in the trusted snapshot's exec_once list
+    set -l trusted_cmds (jq -r '.exec_once[].cmd' $good_dir/state.json)
+    for entry in (jq -c '.exec_once[] | select(.running == true)' <(secure_capture_state))
+        set -l cmd (echo $entry | jq -r '.cmd')
+        set -l pid (echo $entry | jq -r '.pid')
+        if not contains -- $cmd $trusted_cmds
+            secure_log warn "panic: killing untrusted process pid $pid ('$cmd')"
+            kill $pid 2>/dev/null
+        end
+    end
+
+    hyprctl reload > /dev/null
+
+    secure_restore $good_name
+    secure_log info "panic recovery complete, restored '$good_name'"
+    echo "panic recovery complete, restored '$good_name'"
+end
+
+function secure_mark_good
+    set -l name $argv[1]
+    if test -z "$name"
+        echo "secure: --mark-good requires a snapshot name" >&2
+        return 1
+    end
+    if not test -f $SECURE_SNAPSHOTS/$name/state.json
+        echo "secure: snapshot '$name' not found" >&2
+        return 2
+    end
+    echo $name > $SECURE_LASTGOOD
+    echo "'$name' marked as last-good"
+end
+
+# ---------------------------------------------------------------------------
+# trust score
+# ---------------------------------------------------------------------------
+
+function secure_trust_score
+    set -l score 100
+    set -l reasons
+
+    set -l live (secure_capture_state)
+
+    # config trust: compare against trusted manifest if one exists
+    set -l trusted_manifest $SECURE_TRUSTED/config-hashes.json
+    if test -f $trusted_manifest
+        set -l mismatch (jq -n --argjson live "$live" --slurpfile trusted $trusted_manifest '
+            ($live.config.files) as $cf | ($trusted[0]) as $tf |
+            [($tf | keys[]) as $k | select($cf[$k] != $tf[$k])] | length')
+        if test $mismatch -gt 0
+            set score (math $score - $mismatch \* 15)
+            set -a reasons "-$(math $mismatch \* 15): $mismatch config file(s) differ from trusted hashes"
+        end
+    else
+        set -a reasons "0: no trusted config manifest set, run --trust-config to establish one"
+    end
+
+    # process anomalies: exec-once entries that are not running
+    set -l dead_execs (echo $live | jq '[.exec_once[] | select(.running == false)] | length')
+    if test $dead_execs -gt 0
+        set score (math $score - $dead_execs \* 10)
+        set -a reasons "-$(math $dead_execs \* 10): $dead_execs exec-once process(es) not running"
+    end
+
+    # snapshot drift: compare against last-good if present
+    if test -f $SECURE_LASTGOOD
+        set -l good_name (cat $SECURE_LASTGOOD)
+        set -l good_state $SECURE_SNAPSHOTS/$good_name/state.json
+        if test -f $good_state
+            set -l window_delta (jq -n --slurpfile a $good_state --argjson b "$live" \
+                '(($a[0].clients | length) - ($b.clients | length)) | abs')
+            if test $window_delta -gt 0
+                set -l deduction (math "min($window_delta * 3, 20)")
+                set score (math $score - $deduction)
+                set -a reasons "-$deduction: window count drifted by $window_delta from last-good snapshot"
+            end
+        end
+    else
+        set -a reasons "0: no last-good snapshot marked, panic rollback unavailable"
+    end
+
+    if test $score -lt 0
+        set score 0
+    end
+
+    echo "trust score: $score/100"
+    for r in $reasons
+        echo "  $r"
+    end
+end
+
+function secure_trust_config
+    secure_init_dirs
+    secure_config_hash_json > $SECURE_TRUSTED/config-hashes.json
+    echo "current config hashes stored as trusted baseline"
+end
+
+# ---------------------------------------------------------------------------
+# OUUUU SHI its usage
+# ---------------------------------------------------------------------------
+
+function secure_usage
+    echo "secure - Hyprland session integrity system"
+    echo ""
+    echo "usage:"
+    echo "  secure --snapshot <name> [--force]   capture full session state"
+    echo "  secure --restore <name>              restore a snapshot"
+    echo "  secure --watch                       run live drift monitor"
+    echo "  secure --diff <name>                 compare live session to a snapshot"
+    echo "  secure --panic                       restore last-good snapshot and kill untrusted processes"
+    echo "  secure --trust-score                 print a 0-100 session trust score"
+    echo "  secure --trust-config                store current config hashes as the trusted baseline"
+    echo "  secure --mark-good <name>             mark a snapshot as the panic-restore target"
+    echo "  secure --list                        list stored snapshots"
+    echo "  secure --help                        show this message"
+end
+
+# ---------------------------------------------------------------------------
+# entry point
+# ---------------------------------------------------------------------------
+
+function secure_main
+    if test (count $argv) -eq 0
+        secure_usage
+        return 1
+    end
+
+    secure_init_dirs
+
+    switch $argv[1]
+        case --help -h
+            secure_usage
+            return 0
+        case --list
+            secure_list
+            return $status
+        case --snapshot
+            secure_check_deps; or return $status
+            secure_snapshot $argv[2..-1]
+            return $status
+        case --restore
+            secure_check_deps; or return $status
+            secure_restore $argv[2]
+            return $status
+        case --watch
+            secure_check_deps; or return $status
+            secure_watch
+            return $status
+        case --diff
+            secure_check_deps; or return $status
+            secure_diff $argv[2]
+            return $status
+        case --panic
+            secure_check_deps; or return $status
+            secure_panic
+            return $status
+        case --trust-score
+            secure_check_deps; or return $status
+            secure_trust_score
+            return $status
+        case --trust-config
+            secure_check_deps; or return $status
+            secure_trust_config
+            return $status
+        case --mark-good
+            secure_mark_good $argv[2]
+            return $status
+        case '*'
+            echo "secure: unknown option '$argv[1]'" >&2
+            secure_usage
+            return 1
+    end
+end
+
+secure_main $argv

@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+#
+# repaste - repeatedly paste clipboard content on Wayland/Hyprland
+#
+# By default each cycle is: paste, press Enter, wait, repeat.
+#
+# Usage:
+#   repaste                       # paste whatever is currently on the clipboard, every 1s
+#   repaste "some text"           # put "some text" on the clipboard, then paste it every 1s
+#   repaste -i 2.5 "text"         # custom interval (seconds)
+#   repaste -d 5 "text"           # custom start delay, so you can focus the target window
+#   repaste -k ctrl+shift+v "x"   # custom key combo (default: ctrl+v)
+#   repaste -n 10 "text"          # stop after 10 pastes (default: infinite, Ctrl+C to stop)
+#   repaste --no-enter "text"     # just paste, no Enter keypress after
+#   repaste -g 200 "text"         # gap in ms between paste and Enter (default: 150)
+#
+# Requires: wl-clipboard (wl-copy/wl-paste) and wtype
+#   Arch:   sudo pacman -S wl-clipboard wtype
+
+set -euo pipefail
+
+interval=1
+delay=3
+count=0
+keys="ctrl+v"
+text=""
+text_set=0
+enter=1
+gap_ms=150
+
+usage() {
+    grep '^#' "$0" | sed -n '2,20p' | sed 's/^# \{0,1\}//'
+    exit 0
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -i|--interval) interval="$2"; shift 2 ;;
+        -d|--delay)    delay="$2"; shift 2 ;;
+        -n|--count)    count="$2"; shift 2 ;;
+        -k|--keys)     keys="$2"; shift 2 ;;
+        -g|--gap)      gap_ms="$2"; shift 2 ;;
+        --no-enter)    enter=0; shift ;;
+        -h|--help)     usage ;;
+        --) shift; break ;;
+        -*)
+            echo "Unknown option: $1" >&2
+            exit 1
+            ;;
+        *)
+            text="$1"
+            text_set=1
+            shift
+            ;;
+    esac
+done
+
+for cmd in wl-copy wl-paste wtype; do
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+        echo "Error: '$cmd' not found. Install wl-clipboard and wtype." >&2
+        exit 1
+    fi
+done
+
+if [[ "$text_set" -eq 1 ]]; then
+    printf '%s' "$text" | wl-copy
+    echo "Clipboard set to: $text"
+else
+    current="$(wl-paste 2>/dev/null || true)"
+    if [[ -z "$current" ]]; then
+        echo "Error: clipboard is empty and no text argument was given." >&2
+        exit 1
+    fi
+    echo "Using current clipboard content: $current"
+fi
+
+IFS='+' read -ra parts <<< "$keys"
+key="${parts[-1]}"
+mods=("${parts[@]:0:${#parts[@]}-1}")
+
+mod_down=()
+mod_up=()
+for m in "${mods[@]}"; do
+    mod_down+=(-M "$m")
+    mod_up+=(-m "$m")
+done
+
+do_paste() {
+    wtype "${mod_down[@]}" "$key" "${mod_up[@]}"
+    if [[ "$enter" -eq 1 ]]; then
+        sleep "$(awk "BEGIN {print $gap_ms/1000}")"
+        wtype -k Return
+    fi
+}
+
+echo "Starting in ${delay}s - click/focus the window you want to paste into now."
+sleep "$delay"
+
+if [[ "$enter" -eq 1 ]]; then
+    echo "Cycle: paste ('${keys}') -> Enter -> wait ${interval}s -> repeat. Press Ctrl+C to stop."
+else
+    echo "Pasting every ${interval}s using '${keys}'. Press Ctrl+C to stop."
+fi
+
+i=0
+while true; do
+    do_paste
+    i=$((i + 1))
+    if [[ "$count" -gt 0 && "$i" -ge "$count" ]]; then
+        echo "Reached count of $count, stopping."
+        break
+    fi
+    sleep "$interval"
+done
