@@ -50,6 +50,19 @@ show_disks() {
   echo ""
 }
 
+detect_ucode() {
+  local vendor
+  vendor=$(grep -m1 -oP '(?<=vendor_id\s: ).*' /proc/cpuinfo)
+  case "$vendor" in
+    GenuineIntel) echo "intel-ucode" ;;
+    AuthenticAMD) echo "amd-ucode" ;;
+    *)
+      warn "unrecognized CPU vendor '$vendor', defaulting to no microcode package"
+      echo ""
+      ;;
+  esac
+}
+
 clear
 echo -e "${m}"
 cat << 'EOF'
@@ -74,6 +87,14 @@ timedatectl set-ntp true 2>/dev/null || true
 
 say "disk setup"
 show_disks
+
+say "cpu detection"
+UCODE_PKG=$(detect_ucode)
+if [ -n "$UCODE_PKG" ]; then
+  ok "detected CPU microcode package: $UCODE_PKG"
+else
+  warn "no microcode package will be installed"
+fi
 
 WIPE=false
 AUTOPART=false
@@ -259,6 +280,7 @@ echo "  locale     : $LOCALE"
 echo "  hostname   : $HOSTNAME"
 echo "  user       : $USERNAME"
 echo "  greeter    : $DM_PKG"
+echo "  cpu ucode  : ${UCODE_PKG:-none}"
 echo ""
 confirm "looks good? no going back after this" || die "aborted"
 
@@ -342,7 +364,6 @@ ok "mirrors refreshed"
 say "installing base system (grab a coffee, this takes a while)..."
 PACSTRAP_PKGS=(
   base base-devel linux linux-headers linux-firmware
-  intel-ucode
   lvm2 cryptsetup
   networkmanager
   sudo git curl wget
@@ -371,6 +392,7 @@ PACSTRAP_PKGS=(
   sl figlet toilet fortune-mod cowsay tokei
   github-cli
 )
+[ -n "$UCODE_PKG" ] && PACSTRAP_PKGS+=("$UCODE_PKG")
 [ "$DM_AUR" = false ] && PACSTRAP_PKGS+=("$DM_PKG")
 pacstrap /mnt "${PACSTRAP_PKGS[@]}"
 ok "base system installed"
@@ -491,13 +513,13 @@ console-mode max
 editor no
 LOADER
 
-cat > /boot/loader/entries/bloom.conf <<ENTRY
-title   bloom
-linux   /vmlinuz-linux
-initrd  /intel-ucode.img
-initrd  /initramfs-linux.img
-options $BOOT_OPTIONS
-ENTRY
+{
+  echo "title   bloom"
+  echo "linux   /vmlinuz-linux"
+  [ -n "$UCODE_PKG" ] && echo "initrd  /${UCODE_PKG}.img"
+  echo "initrd  /initramfs-linux.img"
+  echo "options $BOOT_OPTIONS"
+} > /boot/loader/entries/bloom.conf
 
 if [ ! -d /home/$USERNAME/.config/nvim ]; then
   sudo -u $USERNAME git clone https://github.com/LazyVim/starter /home/$USERNAME/.config/nvim 2>/dev/null \

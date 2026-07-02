@@ -2,7 +2,8 @@
 a secure, beautiful, pre-configured arch-based linux distro built around a hyprland workflow. made by auth, for auth: but feel free to build it yourself.
 bloom comes with disk encryption (LUKS2), a custom installer, developer tools, and a curated set of apps out of the box. it is not designed for beginners. it requires some familiarity with arch linux and the command line! this is still arch under the hood, so you maintain your own system still.
 
-> **note:** bloom currently installs intel-ucode and assumes an intel CPU. AMD support is not handled by the installer yet!!
+> **note:** bloom auto-detects Intel vs AMD CPUs and installs the correct microcode package
+> (`intel-ucode` or `amd-ucode`) accordingly.
 
 ## what's included
 - hyprland (via dotfiles installer at ii.clsty.link)
