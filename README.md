@@ -18,6 +18,19 @@ bloom comes with disk encryption (LUKS2), a custom installer, developer tools, a
 - custom SDDM login theme
 - custom plymouth boot splash
 - yay (AUR helper)
+- custom session-integrity and clipboard-automation CLI tools (`secure`, `repaste`)
+
+## custom CLI tools
+bloom ships two custom tools in `/usr/local/bin`, installed automatically by the installer:
+
+- **`secure`** - hyprland session integrity system. snapshots your workspaces, windows,
+  binds, and exec-once processes; diffs live state against a snapshot; restores a known-good
+  state; and can compute a trust score for the current session. also supports a `--panic` mode
+  that kills untrusted processes and rolls back to your last marked-good snapshot. requires a
+  running hyprland session. run `secure --help` for usage.
+
+- **`repaste`** - repeatedly pastes clipboard content on Wayland/Hyprland, useful for
+  filling in repetitive prompts or forms. run `repaste --help` for usage.
 
 ## security
 bloom ships with a hardened default configuration to be used for real-work-in-the-real-world.
