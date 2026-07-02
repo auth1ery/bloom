@@ -59,12 +59,15 @@ cat << 'EOF'
    '-( * )-'
       `-'
 
-        bloom — arch linux installer
-        by auth
+        bloom
+        a secure, beautiful, preconfigured arch-based 
+        linux distro built around a hyprland workflow.
+
+        by auth <3
 
 EOF
 echo -e "${w}"
-echo -e "  ${y}defaults are shown in yellow — press enter to accept them${w}"
+echo -e "  ${y}defaults are shown in yellow! press enter to accept them${w}"
 echo -e "  ${y}read each prompt carefully before continuing${w}"
 
 timedatectl set-ntp true 2>/dev/null || true
@@ -99,8 +102,8 @@ if [ "$PARTMODE" = "1" ]; then
   WIPE=true
   FORMAT_EFI=true
   echo ""
-  warn "ALL data on $DISK will be permanently destroyed"
-  confirm "are you absolutely sure?" || die "aborted"
+  warn "ALL data on $DISK will be permanently destroyed (and i mean it)"
+  confirm "are you ABSOLUTELY sure?" || die "aborted"
 
 elif [ "$PARTMODE" = "2" ]; then
 
@@ -150,7 +153,7 @@ elif [ "$PARTMODE" = "4" ]; then
   echo ""
   warn "cfdisk will open now. create or resize partitions, then save and quit."
   warn "you need: a FAT32 EFI partition (512M+) and a root partition (20G+)."
-  warn "do NOT format them in cfdisk — bloom will handle that."
+  warn "do NOT format them in cfdisk! bloom will handle that by itself."
   echo ""
   read -rp "$(echo -e "${c}  ?${w}  press enter to open cfdisk...")"
   cfdisk "$DISK"
@@ -231,7 +234,7 @@ case "$DMMODE" in
     if pacman -Si "$DM_PKG" &>/dev/null; then
       DM_AUR=false
     else
-      warn "$DM_PKG not in official repos — will install via yay"
+      warn "$DM_PKG not in official repos! will install via yay"
       DM_AUR=true
     fi
     ;;
@@ -421,10 +424,10 @@ systemctl enable tlp
 systemctl enable apparmor
 
 cd /tmp
-git clone https://aur.archlinux.org/yay.git || { echo "warn: failed to clone yay — AUR packages will not be installed"; exit 0; }
+git clone https://aur.archlinux.org/yay.git || { echo "warn: failed to clone yay. AUR packages will not be installed"; exit 0; }
 chown -R $USERNAME:$USERNAME yay
 cd yay
-sudo -u $USERNAME makepkg -si --noconfirm || { echo "warn: yay build failed — AUR packages will not be installed"; exit 0; }
+sudo -u $USERNAME makepkg -si --noconfirm || { echo "warn: yay build failed. AUR packages will not be installed"; exit 0; }
 cd /
 rm -rf /tmp/yay
 
@@ -432,7 +435,7 @@ sudo -u $USERNAME yay -S --noconfirm \
   helium-browser-bin vscodium-bin obsidian-bin vesktop \
   obs-studio-git windsurf localsend ufw-docker android-studio \
   hollywood cbonsai tty-clock \
-  $( [ "$DM_AUR" = true ] && echo "$DM_PKG" ) || warn "some AUR packages failed to install — you can install them manually after boot with yay"
+  $( [ "$DM_AUR" = true ] && echo "$DM_PKG" ) || warn "some AUR packages failed to install! you can install them manually after boot with yay"
 
 systemctl enable $DM_SVC
 
@@ -1086,6 +1089,13 @@ if status is-login
     set -gx XDG_DATA_DIRS /var/lib/flatpak/exports/share $HOME/.local/share/flatpak/exports/share $XDG_DATA_DIRS
     fastfetch
 end
+
+alias cls clear
+alias .. 'cd ..'
+alias ... 'cd ../..'
+alias .... 'cd ../../..'
+alias h history
+alias q exit
 FISHCFG
 chown -R 1000:1000 "$FISH_CONF_DIR"
 ok "fish configured"
@@ -1094,7 +1104,7 @@ say "installing hyprland dotfiles..."
 if arch-chroot /mnt sudo -u "$USERNAME" bash -c 'bash <(curl -s https://ii.clsty.link/get)'; then
   ok "dotfiles installed"
 else
-  warn "dotfiles install failed or was interrupted — run 'bash <(curl -s https://ii.clsty.link/get)' manually after boot"
+  warn "dotfiles install failed or was interrupted!!! run 'bash <(curl -s https://ii.clsty.link/get)' manually after boot if you want the hyprland dotfiles..."
 fi
 
 echo ""
@@ -1108,6 +1118,9 @@ cat << 'EOF'
 
    bloom is installed.
 
+   enjoy your new system that
+   you actually own!
+
 EOF
 echo -e "${w}"
 
@@ -1117,5 +1130,5 @@ umount -R /mnt
 [ "$USE_ENCRYPTION" = true ] && cryptsetup close cryptroot
 
 echo ""
-ok "all done. reboot with 'reboot'."
+ok "all done! reboot with 'reboot'."
 echo ""
