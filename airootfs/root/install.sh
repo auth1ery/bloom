@@ -431,6 +431,13 @@ HOSTS
 sed -i 's/^NAME=.*/NAME="Bloom Linux"/' /etc/os-release
 sed -i 's/^PRETTY_NAME=.*/PRETTY_NAME="Bloom Linux"/' /etc/os-release
 
+sed -i 's/^#Color/Color/' /etc/pacman.conf
+sed -i '/^Color/a ILoveCandy' /etc/pacman.conf
+sed -i 's/^#ParallelDownloads = 5/ParallelDownloads = 10/' /etc/pacman.conf
+sed -i 's/^#VerbosePkgLists/VerbosePkgLists/' /etc/pacman.conf
+
+sed -i '/^#\[multilib\]/,+1 s/^#//' /etc/pacman.conf
+
 sed -i "s/^HOOKS=.*/$MKINIT_HOOKS/" /etc/mkinitcpio.conf
 mkinitcpio -P
 
@@ -533,6 +540,23 @@ flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.f
 flatpak install flathub -y com.spotify.Client || echo "warn: spotify install failed"
 flatpak install flathub -y it.mijorus.gearlever || echo "warn: gearlever install failed"
 flatpak install flathub -y io.github.eteran.edb-debugger || echo "warn: edb install failed"
+
+cat > /etc/motd << 'MOTD'
+
+      _._
+   .-( * )-.
+  ( *  *  * )
+   '-( * )-'
+      `-'
+
+        bloom linux
+        based on arch, built with love
+        have fun ssh-ing!
+
+MOTD
+
+sed -i 's/^#PrintMotd no/PrintMotd yes/' /etc/ssh/sshd_config 2>/dev/null || true
+grep -A1 "^Color" /etc/pacman.conf
 
 CHROOT
 
