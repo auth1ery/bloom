@@ -390,7 +390,7 @@ PACSTRAP_PKGS=(
   ufw fail2ban apparmor
   alsa-utils htop btop reflector
   sl figlet toilet fortune-mod cowsay tokei
-  github-cli traceroute
+  github-cli traceroute nasm
 )
 [ -n "$UCODE_PKG" ] && PACSTRAP_PKGS+=("$UCODE_PKG")
 [ "$DM_AUR" = false ] && PACSTRAP_PKGS+=("$DM_PKG")
