@@ -547,7 +547,7 @@ cat > /etc/motd << 'MOTD'
    .-( * )-.
   ( *  *  * )
    '-( * )-'
-      `-'
+      \`-'
 
         bloom linux
         based on arch, built with love
