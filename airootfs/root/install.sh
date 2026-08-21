@@ -464,7 +464,7 @@ rm -rf /tmp/yay
 sudo -u $USERNAME yay -S --noconfirm \
   helium-browser-bin vscodium-bin obsidian-bin vesktop \
   obs-studio-git windsurf localsend ufw-docker android-studio \
-  hollywood cbonsai tty-clock \
+  hollywood cbonsai tty-clock supertuxkart codespell \
   $( [ "$DM_AUR" = true ] && echo "$DM_PKG" ) || warn "some AUR packages failed to install! you can install them manually after boot with yay"
 
 systemctl enable $DM_SVC
