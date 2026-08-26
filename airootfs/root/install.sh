@@ -371,7 +371,8 @@ PACSTRAP_PKGS=(
   fastfetch
   fish
   jq inotify-tools wl-clipboard wtype
-  pipewire pipewire-alsa pipewire-pulse wireplumber
+  pipewire pipewire-alsa pipewire-pulse wireplumber rtkit
+  xdg-desktop-portal xdg-desktop-portal-hyprland
   bluez bluez-utils
   nano neovim
   dosfstools e2fsprogs
@@ -391,6 +392,7 @@ PACSTRAP_PKGS=(
   alsa-utils htop btop reflector
   sl figlet toilet fortune-mod cowsay tokei
   github-cli traceroute nasm
+  obs-studio
 )
 [ -n "$UCODE_PKG" ] && PACSTRAP_PKGS+=("$UCODE_PKG")
 [ "$DM_AUR" = false ] && PACSTRAP_PKGS+=("$DM_PKG")
@@ -463,7 +465,7 @@ rm -rf /tmp/yay
 
 sudo -u $USERNAME yay -S --noconfirm \
   helium-browser-bin vscodium-bin obsidian-bin vesktop \
-  obs-studio-git windsurf localsend ufw-docker android-studio \
+  windsurf localsend ufw-docker android-studio \
   hollywood cbonsai tty-clock supertuxkart codespell \
   $( [ "$DM_AUR" = true ] && echo "$DM_PKG" ) || warn "some AUR packages failed to install! you can install them manually after boot with yay"
 
@@ -1144,6 +1146,19 @@ FISHCFG
 chown -R 1000:1000 "$FISH_CONF_DIR"
 ok "fish configured"
 
+say "setting up screen-sharing portal config..."
+PORTAL_CONF_DIR="/mnt/home/$USERNAME/.config/xdg-desktop-portal"
+mkdir -p "$PORTAL_CONF_DIR"
+cat > "$PORTAL_CONF_DIR/hyprland-portals.conf" << 'PORTALCONF'
+[preferred]
+default=hyprland;gtk
+org.freedesktop.impl.portal.ScreenCast=hyprland
+org.freedesktop.impl.portal.RemoteDesktop=hyprland
+org.freedesktop.impl.portal.Registry=hyprland
+PORTALCONF
+chown -R 1000:1000 "$PORTAL_CONF_DIR"
+ok "portal config written (fixes OBS/Vesktop screen capture on hyprland)"
+
 say "installing custom CLI tools..."
 
 TOOLS_SRC="$(dirname "$(readlink -f "$0")")/bloom-bin"
@@ -1166,6 +1181,21 @@ if arch-chroot /mnt sudo -u "$USERNAME" bash -c 'bash <(curl -s https://ii.clsty
 else
   warn "dotfiles install failed or was interrupted!!! run 'bash <(curl -s https://ii.clsty.link/get)' manually after boot if you want the hyprland dotfiles..."
 fi
+
+say "verifying dbus activation environment is exported in hyprland config..."
+HYPR_CONF="/mnt/home/$USERNAME/.config/hypr/hyprland.conf"
+if [ -f "$HYPR_CONF" ]; then
+  if ! grep -q "dbus-update-activation-environment" "$HYPR_CONF"; then
+    echo "" >> "$HYPR_CONF"
+    echo "exec-once = dbus-update-activation-environment --systemd --all" >> "$HYPR_CONF"
+    ok "added dbus-update-activation-environment to hyprland.conf"
+  else
+    ok "dbus-update-activation-environment already present"
+  fi
+else
+  warn "hyprland.conf not found (dotfiles may have failed) — add 'exec-once = dbus-update-activation-environment --systemd --all' to it manually, otherwise OBS/screen-sharing won't work"
+fi
+chown 1000:1000 "$HYPR_CONF" 2>/dev/null || true
 
 echo ""
 echo -e "${m}"
