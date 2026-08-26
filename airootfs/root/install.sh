@@ -1193,7 +1193,7 @@ if [ -f "$HYPR_CONF" ]; then
     ok "dbus-update-activation-environment already present"
   fi
 else
-  warn "hyprland.conf not found (dotfiles may have failed) — add 'exec-once = dbus-update-activation-environment --systemd --all' to it manually, otherwise OBS/screen-sharing won't work"
+  warn "hyprland.conf not found (dotfiles may have failed)! add 'exec-once = dbus-update-activation-environment --systemd --all' to it manually, otherwise OBS/screen-sharing won't work"
 fi
 chown 1000:1000 "$HYPR_CONF" 2>/dev/null || true
 
